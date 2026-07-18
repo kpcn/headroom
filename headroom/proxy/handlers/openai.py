@@ -1324,16 +1324,29 @@ class OpenAIHandlerMixin:
         """Return True when inbound headers request full passthrough."""
         return _headroom_bypass_enabled(headers)
 
-    def _resolve_openai_upstream(self, request: Request) -> str:
+    def _resolve_openai_upstream(self, request: Request, model: str | None = None) -> str:
         """Return the OpenAI upstream base URL for ``request``.
 
-        Honors the ``x-headroom-base-url`` request header so OpenAI-compatible
-        gateways (LiteLLM, CPA, self-hosted vLLM, Azure OpenAI) route through
-        the dedicated ``/v1/chat/completions`` and ``/v1/responses`` handlers,
-        not just the generic passthrough route that already honors it. Falls
-        back to the configured ``OPENAI_API_URL`` (``OPENAI_TARGET_API_URL``).
+        Precedence (first match wins)::
+
+            1. ``x-headroom-base-url`` request header (existing behaviour).
+            2. Model-prefix route (``HEADROOM_UPSTREAM_ROUTES``) when ``model``
+               is provided and a matching prefix is configured.
+            3. Configured ``OPENAI_API_URL`` (``OPENAI_TARGET_API_URL``).
+
+        When ``model`` is ``None`` or no route matches, behaviour is identical
+        to the pre-upstream-router code path.
         """
-        return _resolve_openai_upstream_base(request.headers) or self.OPENAI_API_URL
+        # 1. Per-request header override
+        header_url = _resolve_openai_upstream_base(request.headers)
+        if header_url:
+            return header_url
+        # 2. Model prefix routing
+        router_url = self.upstream_router.resolve(model) if hasattr(self, "upstream_router") else None
+        if router_url:
+            return router_url
+        # 3. Fall back to configured default
+        return self.OPENAI_API_URL
 
     @staticmethod
     def _strict_previous_turn_frozen_count(
@@ -2516,7 +2529,7 @@ class OpenAIHandlerMixin:
         messages = body.get("messages", [])
         original_client_messages = copy.deepcopy(messages)
         custom_upstream_base_url = _resolve_openai_upstream_base(request.headers)
-        upstream_base_url = self._resolve_openai_upstream(request)
+        upstream_base_url = self._resolve_openai_upstream(request, model=model)
         handler_path_suffix = _resolve_openai_chat_handler_path(
             upstream_base_url,
             model,
