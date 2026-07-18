@@ -10,6 +10,7 @@ deterministic port, and starts a detached proxy process with
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -55,9 +56,14 @@ def find_project_root(start: Path | None = None) -> Path:
 
 
 def compute_port(project_root: Path) -> int:
-    """Deterministic port within ``PORT_MIN``..``PORT_MIN+PORT_RANGE-1``."""
-    raw = hash(str(project_root.resolve()))
-    offset = raw % PORT_RANGE
+    """Deterministic port within ``PORT_MIN``..``PORT_MIN+PORT_RANGE-1``.
+
+    Uses MD5 hash of the resolved project path so the result is consistent
+    across Python processes, matching the JS plugin's ``createHash("md5")``.
+    """
+    path_bytes = str(project_root.resolve()).encode()
+    digest = hashlib.md5(path_bytes, usedforsecurity=False).digest()
+    offset = int.from_bytes(digest[:4], "big") % PORT_RANGE
     return PORT_MIN + offset
 
 
@@ -144,7 +150,7 @@ def up(port: int | None, no_daemon: bool = False) -> None:  # noqa: PLR0912 — 
 
     # Write base URL file for OpenCode `{file:.headroom/base_url}` config variables
     base_url_path = headroom_dir / "base_url"
-    base_url_path.write_text(f"127.0.0.1:{proxy_port}")
+    base_url_path.write_text(f"http://127.0.0.1:{proxy_port}")
 
     # Load upstream routes
     routes_json = os.environ.get("HEADROOM_UPSTREAM_ROUTES")
