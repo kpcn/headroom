@@ -1342,7 +1342,9 @@ class OpenAIHandlerMixin:
         if header_url:
             return header_url
         # 2. Model prefix routing
-        router_url = self.upstream_router.resolve(model) if hasattr(self, "upstream_router") else None
+        router_url = (
+            self.upstream_router.resolve(model) if hasattr(self, "upstream_router") else None
+        )
         if router_url:
             return router_url
         # 3. Fall back to configured default
