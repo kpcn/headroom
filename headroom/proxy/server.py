@@ -170,6 +170,7 @@ from headroom.proxy.savings_tracker import LITELLM_AVAILABLE
 from headroom.proxy.semantic_cache import SemanticCache  # noqa: F401
 from headroom.proxy.ssl_context import build_httpx_verify
 from headroom.proxy.tool_schema_savings_policy import tool_schema_saved_from_tags
+from headroom.proxy.upstream_router import UpstreamRouter, UpstreamRouterConfig
 from headroom.proxy.warmup import WarmupRegistry
 from headroom.proxy.ws_session_registry import WebSocketSessionRegistry
 from headroom.subscription.base import get_quota_registry, reset_quota_registry
@@ -722,6 +723,10 @@ class HeadroomProxy(
         # Cost-aware model routing (issue #1706). Disabled unless configured, so
         # the default request path is unchanged.
         self.model_router = ModelRouter(config.model_router)
+
+        # Model-prefix-based upstream routing. Maps model name prefixes to
+        # upstream base URLs. Empty by default so existing behaviour is unchanged.
+        self.upstream_router = UpstreamRouter(config.upstream_router)
 
         # Initialize transforms based on routing mode.
         #
@@ -4799,6 +4804,9 @@ def _proxy_config_from_env() -> ProxyConfig:
         model_router=ModelRouterConfig.from_env(
             os.environ.get("HEADROOM_MODEL_ROUTER_ENABLED"),
             os.environ.get("HEADROOM_MODEL_ROUTES"),
+        ),
+        upstream_router=UpstreamRouterConfig.from_env(
+            os.environ.get("HEADROOM_UPSTREAM_ROUTES"),
         ),
     )
 
