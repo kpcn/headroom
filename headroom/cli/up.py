@@ -142,6 +142,10 @@ def up(port: int | None, no_daemon: bool = False) -> None:  # noqa: PLR0912 — 
         )
         sys.exit(1)
 
+    # Write base URL file for OpenCode `{file:.headroom/base_url}` config variables
+    base_url_path = headroom_dir / "base_url"
+    base_url_path.write_text(f"http://127.0.0.1:{proxy_port}/v1")
+
     # Load upstream routes
     routes_json = os.environ.get("HEADROOM_UPSTREAM_ROUTES")
     if not routes_json:
