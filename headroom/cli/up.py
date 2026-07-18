@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -168,13 +169,14 @@ def up(port: int | None, no_daemon: bool = False) -> None:  # noqa: PLR0912 — 
     if routes_json:
         env["HEADROOM_UPSTREAM_ROUTES"] = routes_json
 
-    cmd = [sys.executable, "-m", "headroom", "proxy", "--port", str(proxy_port)]
+    headroom_bin = "headroom"
+    cmd = [headroom_bin, "proxy", "--port", str(proxy_port)]
 
     if no_daemon:
         click.echo(f"Starting Headroom proxy on port {proxy_port} (foreground)...")
         os.execve(
-            sys.executable,
-            [sys.executable, "-m", "headroom", "proxy", "--port", str(proxy_port)],
+            shutil.which(headroom_bin) or headroom_bin,
+            cmd,
             env,
         )
     else:
