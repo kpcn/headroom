@@ -22,6 +22,7 @@ httpx = pytest.importorskip("httpx")
 from starlette.datastructures import Headers  # noqa: E402
 
 from headroom.proxy.handlers.openai import OpenAIHandlerMixin  # noqa: E402
+from headroom.proxy.upstream_router import UpstreamRouter, UpstreamRouterConfig  # noqa: E402
 
 
 class _FakeRequest:
@@ -36,12 +37,15 @@ class _FakeRequest:
         self.headers = Headers(headers=headers)
 
 
-def _stub_proxy(fallback_url: str) -> OpenAIHandlerMixin:
-    """A bare mixin instance with only ``OPENAI_API_URL`` configured."""
+def _stub_proxy(fallback_url: str, upstream_router: UpstreamRouter | None = None) -> OpenAIHandlerMixin:
+    """A bare mixin instance with ``OPENAI_API_URL`` and optional router."""
     return type(  # type: ignore[return-value]
         "_S",
         (OpenAIHandlerMixin,),
-        {"OPENAI_API_URL": fallback_url},
+        {
+            "OPENAI_API_URL": fallback_url,
+            "upstream_router": upstream_router or UpstreamRouter(None),
+        },
     )()
 
 
@@ -78,6 +82,74 @@ def test_header_lookup_is_case_insensitive() -> None:
     request = _FakeRequest({"X-Headroom-Base-Url": "https://gateway.example"})
 
     assert proxy._resolve_openai_upstream(request) == "https://gateway.example"
+
+
+# ---------------------------------------------------------------------------
+# Model-prefix routing tests (HEADROOM_UPSTREAM_ROUTES)
+# ---------------------------------------------------------------------------
+
+
+def test_model_route_matches() -> None:
+    router = UpstreamRouter(UpstreamRouterConfig.from_env(
+        '[{"prefix": "deepseek", "url": "https://api.deepseek.com/v1"}]'
+    ))
+    proxy = _stub_proxy("https://api.openai.test", router)
+    request = _FakeRequest({})
+    assert proxy._resolve_openai_upstream(request, model="deepseek-chat") == "https://api.deepseek.com/v1"
+
+
+def test_model_route_falls_back_to_default() -> None:
+    router = UpstreamRouter(UpstreamRouterConfig.from_env(
+        '[{"prefix": "deepseek", "url": "https://api.deepseek.com/v1"}]'
+    ))
+    proxy = _stub_proxy("https://api.openai.test", router)
+    request = _FakeRequest({})
+    assert proxy._resolve_openai_upstream(request, model="gpt-5") == "https://api.openai.test"
+
+
+def test_header_still_wins_over_model_route() -> None:
+    router = UpstreamRouter(UpstreamRouterConfig.from_env(
+        '[{"prefix": "deepseek", "url": "https://api.deepseek.com/v1"}]'
+    ))
+    proxy = _stub_proxy("https://api.openai.test", router)
+    request = _FakeRequest({"x-headroom-base-url": "https://gateway.example"})
+    assert proxy._resolve_openai_upstream(request, model="deepseek-chat") == "https://gateway.example"
+
+
+def test_no_router_no_header_uses_default() -> None:
+    proxy = _stub_proxy("https://api.openai.test")
+    request = _FakeRequest({})
+    assert proxy._resolve_openai_upstream(request, model="deepseek-chat") == "https://api.openai.test"
+
+
+def test_longest_prefix_wins_in_handler() -> None:
+    router = UpstreamRouter(UpstreamRouterConfig.from_env(
+        '[{"prefix": "deepseek", "url": "https://api.deepseek.com/v1"}, '
+        '{"prefix": "deepseek-reasoner", "url": "https://api.deepseek.com/reasoner"}]'
+    ))
+    proxy = _stub_proxy("https://api.openai.test", router)
+    request = _FakeRequest({})
+    assert proxy._resolve_openai_upstream(request, model="deepseek-reasoner") == "https://api.deepseek.com/reasoner"
+    assert proxy._resolve_openai_upstream(request, model="deepseek-chat") == "https://api.deepseek.com/v1"
+
+
+def test_model_routing_is_case_insensitive_in_handler() -> None:
+    router = UpstreamRouter(UpstreamRouterConfig.from_env(
+        '[{"prefix": "deepseek", "url": "https://api.deepseek.com/v1"}]'
+    ))
+    proxy = _stub_proxy("https://api.openai.test", router)
+    request = _FakeRequest({})
+    assert proxy._resolve_openai_upstream(request, model="DEEPSEEK-CHAT") == "https://api.deepseek.com/v1"
+
+
+def test_model_route_no_model_param_uses_default() -> None:
+    """When no model is passed, model routing is skipped (backward compat)."""
+    router = UpstreamRouter(UpstreamRouterConfig.from_env(
+        '[{"prefix": "deepseek", "url": "https://api.deepseek.com/v1"}]'
+    ))
+    proxy = _stub_proxy("https://api.openai.test", router)
+    request = _FakeRequest({})
+    assert proxy._resolve_openai_upstream(request) == "https://api.openai.test"
 
 
 def test_header_with_subpath_preserves_path() -> None:

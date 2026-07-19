@@ -78,6 +78,7 @@ def _register_commands() -> None:
         recover,  # noqa: F401
         savings,  # noqa: F401
         tools,  # noqa: F401
+        up,  # noqa: F401
         update,  # noqa: F401
         wrap,  # noqa: F401
     )

@@ -14,6 +14,7 @@ from typing import Any, Literal
 from headroom.memory import qdrant_env
 from headroom.providers.registry import ProviderApiOverrides
 from headroom.proxy.model_router import ModelRouterConfig
+from headroom.proxy.upstream_router import UpstreamRouterConfig
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,11 @@ class ProxyConfig:
     # when configured, an ordered rule set can rewrite the outgoing model based
     # on request size / tool presence. None keeps behavior unchanged.
     model_router: ModelRouterConfig | None = None
+
+    # Model-prefix-based upstream routing. Maps model name prefixes to upstream
+    # base URLs so the proxy can forward ``/v1/chat/completions`` to different
+    # upstreams without manual env var switching. Empty by default.
+    upstream_router: UpstreamRouterConfig | None = None
 
     # CCR Tool Injection
     ccr_inject_tool: bool = True

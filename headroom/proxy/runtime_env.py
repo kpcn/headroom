@@ -71,6 +71,11 @@ RUNTIME_ENV_KNOBS: tuple[Knob, ...] = (
         "int",
         "Min tool-output chars before the ast-grep read rewrite.",
     ),
+    Knob(
+        "HEADROOM_UPSTREAM_ROUTES",
+        "str",
+        "JSON array of model-prefix → upstream URL routing rules.",
+    ),
 )
 
 _KNOBS_BY_ENV: dict[str, Knob] = {k.env: k for k in RUNTIME_ENV_KNOBS}
