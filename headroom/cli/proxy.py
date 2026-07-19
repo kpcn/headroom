@@ -15,6 +15,7 @@ from headroom.providers.registry import (
     resolve_extra_headers,
 )
 from headroom.proxy.modes import PROXY_MODE_CACHE, normalize_proxy_mode
+from headroom.proxy.upstream_router import UpstreamRouterConfig
 
 from .main import main
 
@@ -1304,6 +1305,9 @@ def proxy(
             anthropic_pre_upstream_memory_context_timeout_seconds
             if anthropic_pre_upstream_memory_context_timeout_seconds is not None
             else 2.0
+        ),
+        upstream_router=UpstreamRouterConfig.from_env(
+            os.environ.get("HEADROOM_UPSTREAM_ROUTES"),
         ),
     )
 
