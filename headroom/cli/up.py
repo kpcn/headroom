@@ -38,22 +38,41 @@ def find_project_root(start: Path | None = None) -> Path:
 
     Resolution order:
     1. ``$HEADROOM_PROJECT_ROOT`` env var if set.
-    2. Walk up from start looking for ``.headroom/``.
-    3. Walk up from start looking for ``.git/``.
+    2. Find the git root (walk up looking for ``.git/``).
+    3. Within the git root boundary, look for ``.headroom/``.
     4. ``start`` (cwd) as fallback.
+
+    Searching for ``.headroom/`` only within the git root prevents
+    accidentally picking up ``~/.headroom`` as the project workspace.
     """
     env_root = os.environ.get("HEADROOM_PROJECT_ROOT", "").strip()
     if env_root:
         return Path(env_root).expanduser().resolve()
 
     cwd = (start or Path.cwd()).resolve()
-    for parent in [cwd] + list(cwd.parents):
-        if (parent / HEADROOM_DIR_NAME).is_dir():
-            return parent
+
+    # Establish project boundary via git root
+    git_root: Path | None = None
     for parent in [cwd] + list(cwd.parents):
         if (parent / ".git").is_dir():
-            return parent
-    return cwd
+            git_root = parent
+            break
+
+    # Look for .headroom only within the project boundary
+    if git_root:
+        for parent in [cwd] + list(cwd.parents):
+            if (parent / HEADROOM_DIR_NAME).is_dir():
+                # Stop if we've gone past the git root
+                if parent != git_root and not str(parent.resolve()).startswith(str(git_root.resolve()) + "/"):
+                    break
+                return parent
+        return git_root
+    else:
+        # No git repo — look for .headroom anywhere or fall back to cwd
+        for parent in [cwd] + list(cwd.parents):
+            if (parent / HEADROOM_DIR_NAME).is_dir():
+                return parent
+        return cwd
 
 
 def compute_port(project_root: Path) -> int:

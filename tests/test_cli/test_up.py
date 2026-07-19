@@ -49,6 +49,17 @@ def test_find_project_root_from_env_var(tmp_path: Path) -> None:
         assert find_project_root(Path("/tmp")) == tmp_path
 
 
+def test_find_project_root_ignores_headroom_outside_git_boundary(tmp_path: Path) -> None:
+    """A .headroom/ outside the git root must not be picked up."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".git").mkdir()
+    # .headroom in parent dir (simulates ~/.headroom)
+    (tmp_path / ".headroom").mkdir()
+    assert find_project_root(project) == project
+    assert not (project / ".headroom").exists()
+
+
 def test_compute_port_is_deterministic(tmp_path: Path) -> None:
     p1 = tmp_path / "project-a"
     p2 = tmp_path / "project-b"
